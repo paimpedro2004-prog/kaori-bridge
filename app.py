@@ -8,18 +8,14 @@ app = Flask(__name__)
 DIFY_API_URL = "https://api.dify.ai/v1/chat-messages"
 DIFY_API_KEY = "app-Akh9PYeeurIE4J8bcYzqAIcx" 
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    # Recebe os dados do Vapi
-    data = request.json
-    
-    # Extrai a mensagem enviada pelo usuário via Vapi
+def process_chat_request(data):
+    # Extrai a mensagem enviada pelo usuário
     try:
         user_message = data['message']['content']
     except (KeyError, TypeError):
         return jsonify({"message": {"role": "assistant", "content": "Erro: formato de mensagem inválido."}}), 400
     
-    # Prepara o payload para o Dify
+    # Payload para o Dify
     payload = {
         "inputs": {},
         "query": user_message,
@@ -27,7 +23,6 @@ def chat():
         "user": "vapi_kaori_user"
     }
     
-    # Cabeçalho com a Chave de API configurada no Render
     headers = {
         "Authorization": f"Bearer {DIFY_API_KEY}", 
         "Content-Type": "application/json"
@@ -36,19 +31,28 @@ def chat():
     # Chama o Dify
     try:
         response = requests.post(DIFY_API_URL, headers=headers, json=payload)
-        response.raise_for_status() # Lança erro se a resposta não for 200
+        response.raise_for_status()
         dify_data = response.json()
         ai_response = dify_data.get("answer", "...")
     except Exception as e:
         ai_response = "Desculpe, estou com problemas técnicos no momento."
     
-    # Retorna o formato que o Vapi espera para falar
     return jsonify({
         "message": {
             "role": "assistant",
             "content": ai_response
         }
     })
+
+# Rota original
+@app.route('/chat', methods=['POST'])
+def chat():
+    return process_chat_request(request.json)
+
+# Rota de resgate para o caminho forçado pelo Vapi
+@app.route('/chat/chat/completions', methods=['POST'])
+def chat_completions_proxy():
+    return process_chat_request(request.json)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
