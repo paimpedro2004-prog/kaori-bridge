@@ -1,5 +1,6 @@
-from flask import Flask, request, jsonify
+import os
 import requests
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
@@ -9,27 +10,36 @@ DIFY_API_KEY = "app-Akh9PYeeurIE4J8bcYzqAIcx" # A que você gerou lá
 
 @app.route('/chat', methods=['POST'])
 def chat():
+    # O Vapi envia o JSON com a estrutura 'message' -> 'content'
     data = request.json
-    # O Vapi envia o histórico em 'messages'. Pegamos a última fala do usuário:
-    user_message = data['message']['content']
+    try:
+        user_message = data['message']['content']
+    except KeyError:
+        return jsonify({"error": "Formato inválido"}), 400
     
-    # Preparamos o formato que o Dify exige
+    # Payload para o Dify
     payload = {
         "inputs": {},
         "query": user_message,
-        "response_mode": "blocking", # O Vapi prefere resposta imediata
-        "user": "kaori_user"
+        "response_mode": "blocking",
+        "user": "vapi_user"
     }
     
-    headers = {"Authorization": f"Bearer {DIFY_API_KEY}", "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {DIFY_API_KEY}", 
+        "Content-Type": "application/json"
+    }
     
     # Chama o Dify
-    response = requests.post(DIFY_API_URL, headers=headers, json=payload)
-    dify_data = response.json()
+    try:
+        response = requests.post(DIFY_API_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        dify_data = response.json()
+        ai_response = dify_data.get("answer", "Desculpe, não consegui processar sua fala.")
+    except Exception as e:
+        ai_response = "Erro de conexão com o cérebro da Kaori."
     
-    # Formata a resposta para o padrão que o Vapi espera
-    ai_response = dify_data.get("answer", "...")
-    
+    # Formato de resposta obrigatório para o Vapi
     return jsonify({
         "message": {
             "role": "assistant",
@@ -38,4 +48,6 @@ def chat():
     })
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    # O Render usa a porta definida pelo sistema
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
